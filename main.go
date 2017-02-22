@@ -42,12 +42,9 @@ type RigaTesto struct {
 
 type RecordRQ struct {
 	Header
-	PrimaPagina bool
-
-	ProgressivoProtocollo   int
-	NomeFileCorto           string
-	ProgressivoRicevuta     int
-	TotaleRecordRicevuta    int
+	PrimaPagina             bool
+	ProgressivoProtocollo   string
+	ProgressivoRicevuta     string
 	CodiceFiscalePartitaIva string
 	Denominazione           string
 	SaltoPagina             bool
@@ -87,7 +84,6 @@ func main() {
 		pdf.CellFormat(0, 10, fmt.Sprintf("%d", pdf.PageNo()),
 			"", 0, "C", false, 0, "")
 	})
-	//pdf.AliasNbPages("")
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
@@ -124,11 +120,11 @@ func main() {
 			fmt.Printf("%#v\n", p)
 			records = append(records, p)
 			break
-		case "R":
-		case "Q":
+		case "R", "Q":
 			rq := &RecordRQ{Header: h}
-			rq.ProgressivoProtocollo, _ = strconv.Atoi(line[18 : 18+9])
-			rq.NomeFileCorto = strings.TrimSpace(line[38 : 38+8])
+			rq.ProgressivoProtocollo = line[18 : 18+9]
+			rq.CodiceFiscalePartitaIva = strings.TrimSpace(line[38 : 38+16])
+			rq.Denominazione = strings.TrimSpace(line[54 : 54+60])
 			rq.TabellaTesto = make([]RigaTesto, 0)
 			for i := 0; i < 19; i++ {
 				offset := 480 + (i * 80)
@@ -179,20 +175,96 @@ func main() {
 		}
 	}
 
+	for _, rec := range records {
+		if p, ok := rec.(*RecordP); ok {
+			addLastPage(pdf, p)
+		}
+		if rq, ok := rec.(*RecordRQ); ok {
+			addInLastPageDetails(pdf, rq)
+		}
+	}
+
 	err = pdf.OutputFileAndClose(pdfFileName)
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
+func addInLastPageDetails(f *gofpdf.Fpdf, rq *RecordRQ) {
+	f.SetFont("Courier", "", 8)
+	f.Ln(-1)
+
+	var esito string
+	if rq.TipoRecord == "R" {
+		esito = "acquisito"
+	} else {
+		esito = "scartato"
+	}
+
+	f.CellFormat(20, 5, esito, "", 0, "", false, 0, "")
+	f.CellFormat(40, 5, rq.ProgressivoProtocollo, "", 0, "", false, 0, "")
+	f.CellFormat(40, 5, rq.CodiceFiscalePartitaIva, "", 0, "", false, 0, "")
+	f.CellFormat(60, 5, rq.Denominazione, "", 0, "", false, 0, "")
+}
+
+func addLastPage(f *gofpdf.Fpdf, p *RecordP) {
+	f.SetFont("Courier", "", 8)
+	f.AddPage()
+	f.Ln(-1)
+
+	f.CellFormat(0, 6, "ELENCO DEI DOCUMENTI ACQUISITI E/O SCARTATI", "", 2, "C", false, 0, "")
+	f.Ln(-1)
+
+	f.CellFormat(50, 5, "PROTOCOLLO DI RICEZIONE:", "", 0, "L", false, 0, "")
+	f.CellFormat(50, 5, p.ProtocolloTelematico, "", 0, "", false, 0, "")
+	f.Ln(-1)
+	f.CellFormat(50, 5, "NOME DEL FILE:", "", 0, "L", false, 0, "")
+	f.CellFormat(50, 5, p.NomeFileLungo, "", 0, "", false, 0, "")
+	f.Ln(-1)
+	f.CellFormat(50, 5, "TIPO DOCUMENTO:", "", 0, "L", false, 0, "")
+	if p.CodiceFornitura == "I24A0" {
+		f.CellFormat(50, 5, "Esito versamento F24", "", 0, "", false, 0, "")
+	}
+	f.Ln(-1)
+	f.CellFormat(50, 5, "DOCUMENTI ACQUISITI:", "", 0, "L", false, 0, "")
+	f.CellFormat(10, 5, strconv.Itoa(p.TotaleDocumentiAccolti), "", 0, "R", false, 0, "")
+	f.Ln(-1)
+	f.CellFormat(50, 5, "DOCUMENTI SCARTATI:", "", 0, "L", false, 0, "")
+	f.CellFormat(10, 5, strconv.Itoa(p.TotaleDocumentiRespinti), "", 0, "R", false, 0, "")
+
+	f.Ln(-1)
+	f.Ln(-1)
+	f.CellFormat(20, 5, "Esito", "", 0, "L", false, 0, "")
+	f.CellFormat(40, 5, "Protocollo Documenti", "", 0, "L", false, 0, "")
+	f.CellFormat(40, 5, "Codice Fiscale", "", 0, "L", false, 0, "")
+	f.CellFormat(60, 5, "Denominazione", "", 0, "L", false, 0, "")
+}
+
 func addInFirstPage(f *gofpdf.Fpdf, rq *RecordRQ) {
 	f.SetFont("Courier", "", 8)
-	f.CellFormat(0, 6, rq.TabellaTesto[0].Testo, "", 2, "C", false, 0, "")
+	f.Ln(-1)
+	for _, t := range rq.TabellaTesto {
+		if t.TipoRiga == "T" {
+			log.Fatal(t)
+		}
+
+		if t.TipoRiga == "P" {
+			f.CellFormat(0, 6, t.Testo, "", 2, "", false, 0, "")
+		}
+	}
 }
 
 func addPage(f *gofpdf.Fpdf, rq *RecordRQ) {
 	f.SetFont("Courier", "", 8)
 	f.AddPage()
+	f.Ln(-1)
+	for _, t := range rq.TabellaTesto {
+		if t.TipoRiga == "T" {
+			log.Fatal(t)
+		}
+
+		f.CellFormat(0, 6, t.Testo, "", 2, "", false, 0, "")
+	}
 }
 
 func startDocument(f *gofpdf.Fpdf, p *RecordP) {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"github.com/jung-kurt/gofpdf"
 	"log"
@@ -66,10 +67,19 @@ func main() {
 	records := make([]Record, 0)
 
 	pdf := gofpdf.New("P", "mm", "A4", "")
+
+	rd := bytes.NewReader(MustAsset("logo.png"))
+	pdf.RegisterImageOptionsReader("logo.png", gofpdf.ImageOptions{
+		ImageType: "png",
+		ReadDpi:   true,
+	}, rd)
 	pdf.SetFont("Courier", "B", 12)
 	pdf.SetHeaderFunc(func() {
 		pdf.SetFont("Courier", "B", 12)
-		pdf.ImageOptions("logo.png", 85, 5, 0, 0, false, gofpdf.ImageOptions{}, 0, "")
+		pdf.ImageOptions("logo.png", 85, 5, 0, 0, false, gofpdf.ImageOptions{
+			ImageType: "png",
+			ReadDpi:   true,
+		}, 0, "")
 		pdf.SetY(20)
 		pdf.SetFont("Courier", "B", 8)
 		pdf.MultiCell(0, 6,

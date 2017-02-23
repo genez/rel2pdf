@@ -49,6 +49,7 @@ type RecordRQ struct {
 	CodiceFiscalePartitaIva string
 	Denominazione           string
 	SaltoPagina             bool
+	Titolo                  string
 	TabellaTesto            []RigaTesto
 }
 
@@ -135,6 +136,7 @@ func main() {
 			rq.ProgressivoProtocollo = line[18 : 18+9]
 			rq.CodiceFiscalePartitaIva = strings.TrimSpace(line[38 : 38+16])
 			rq.Denominazione = strings.TrimSpace(line[54 : 54+60])
+			rq.Titolo = strings.TrimSpace(line[250 : 250+150])
 			rq.TabellaTesto = make([]RigaTesto, 0)
 			for i := 0; i < 19; i++ {
 				offset := 480 + (i * 80)
@@ -160,9 +162,12 @@ func main() {
 		log.Fatal(err)
 	}
 
+	var testata *RecordP
+
 	for _, rec := range records {
 		if p, ok := rec.(*RecordP); ok {
 			startDocument(pdf, p)
+			testata = p
 		}
 	}
 
@@ -181,7 +186,7 @@ func main() {
 
 	for _, rec := range records {
 		if rq, ok := rec.(*RecordRQ); ok {
-			addPage(pdf, rq)
+			addPage(pdf, testata, rq)
 		}
 	}
 
@@ -193,6 +198,10 @@ func main() {
 			addInLastPageDetails(pdf, rq)
 		}
 	}
+	pdf.Ln(-1)
+	pdf.Ln(-1)
+	pdf.CellFormat(0, 5, "Li, "+testata.DataRicezione.Format("02/01/2006"), "", 2, "", false, 0, "")
+	pdf.Ln(-1)
 
 	err = pdf.OutputFileAndClose(pdfFileName)
 	if err != nil {
@@ -264,10 +273,14 @@ func addInFirstPage(f *gofpdf.Fpdf, rq *RecordRQ) {
 	}
 }
 
-func addPage(f *gofpdf.Fpdf, rq *RecordRQ) {
+func addPage(f *gofpdf.Fpdf, p *RecordP, rq *RecordRQ) {
 	f.SetFont("Courier", "", 8)
 	f.AddPage()
 	f.Ln(-1)
+
+	f.CellFormat(0, 6, rq.Titolo, "", 2, "C", false, 0, "")
+	f.Ln(-1)
+
 	for _, t := range rq.TabellaTesto {
 		if t.TipoRiga == "T" {
 			log.Fatal(t)
@@ -275,6 +288,10 @@ func addPage(f *gofpdf.Fpdf, rq *RecordRQ) {
 
 		f.CellFormat(0, 6, t.Testo, "", 2, "", false, 0, "")
 	}
+
+	f.Ln(-1)
+	f.CellFormat(0, 5, "Li, "+p.DataRicezione.Format("02/01/2006"), "", 2, "", false, 0, "")
+	f.Ln(-1)
 }
 
 func startDocument(f *gofpdf.Fpdf, p *RecordP) {
@@ -284,10 +301,12 @@ func startDocument(f *gofpdf.Fpdf, p *RecordP) {
 	f.Ln(-1)
 
 	f.CellFormat(0, 6, p.Titolo, "", 2, "C", false, 0, "")
+	f.Ln(-1)
 
 	for _, c := range p.TabellaTesto {
 		f.CellFormat(0, 5, c.Testo, "", 2, "", false, 0, "")
 	}
+
 	f.Ln(-1)
 	f.CellFormat(0, 5, "Li, "+p.DataRicezione.Format("02/01/2006"), "", 2, "", false, 0, "")
 	f.Ln(-1)
